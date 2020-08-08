@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:rpg_dice_roller/models/error.dart';
+import 'package:rpg_dice_roller/models/message.dart';
 import 'package:rpg_dice_roller/models/roll.dart';
 import 'package:rpg_dice_roller/screens/room_select_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,7 +52,7 @@ class RollScreenState extends State<RollScreen> {
   IO.Socket _socket;
   bool _socketConnected = false;
 
-  final List<Roll> _rollHistory = new List();
+  final List<Message> _messageHistory = new List();
   final ScrollController _scrollController = new ScrollController();
 
   final Future<SharedPreferences> _configPrefs = SharedPreferences.getInstance();
@@ -111,9 +113,9 @@ class RollScreenState extends State<RollScreen> {
     return ListView.builder(
       controller: _scrollController,
       shrinkWrap: true,
-      itemCount: _rollHistory.length,
+      itemCount: _messageHistory.length,
       itemBuilder: (context, index) {
-        return ItemRoll(_rollHistory[index], index);
+        return ItemMessage(_messageHistory[index], index);
       },
     );
   }
@@ -173,7 +175,7 @@ class RollScreenState extends State<RollScreen> {
             setState(() {
               _room = value.roomName;
               _player = value.playerName;
-              _rollHistory.clear();
+              _messageHistory.clear();
             });
             _changeSocketRoom();
           }
@@ -268,24 +270,44 @@ class RollScreenState extends State<RollScreen> {
       debugPrint('disconnect');
     });
 
-    _socket.on('message', (data) {
-      debugPrint("message: " + data.toString());
+    _socket.on('player-disconnect', (msg) {
+      setState(() {
+        Message m = Message.fromJson(msg);
+        _messageHistory.add(m);
+      });
+      _scrollDown();
+    });
+
+    _socket.on('player-connect', (msg) {
+      setState(() {
+        Message m = Message.fromJson(msg);
+        _messageHistory.add(m);
+      });
+      _scrollDown();
+    });
+
+    _socket.on('server-error', (err) {
+      setState(() {
+        Error m = Error.fromJson(err);
+        _messageHistory.add(m);
+      });
+      _scrollDown();
     });
 
     _socket.on('roll-result', (roll) {
       setState(() {
         Roll r = Roll.fromJson(roll);
-        _rollHistory.add(r);
+        _messageHistory.add(r);
       });
       _scrollDown();
     });
 
     _socket.on('roll-history', (rolls) {
       setState(() {
-        _rollHistory.clear();
+        _messageHistory.clear();
         for (Map<String, dynamic> rollJson in rolls) {
           Roll r = Roll.fromJson(rollJson);
-          _rollHistory.add(r);
+          _messageHistory.add(r);
         }
       });
       _scrollDown();
@@ -353,7 +375,7 @@ class Display {
     String response = "";
     for (RollButton item in _display) {
       if (item.type == ButtonType.OPERATOR) {
-        response += " " + item.value + " ";
+        response += " ${item.value} ";
       } else {
         response += item.value;
       }
@@ -363,11 +385,11 @@ class Display {
 }
 
 // ignore: must_be_immutable
-class ItemRoll extends StatelessWidget {
-  final Roll _roll;
+class ItemMessage extends StatelessWidget {
+  final Message message;
   Color _color;
 
-  ItemRoll(this._roll, int index) {
+  ItemMessage(this.message, int index) {
     if (index % 2 == 0) {
       _color = Colors.black38;
     } else {
@@ -383,37 +405,76 @@ class ItemRoll extends StatelessWidget {
           color: _color,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2),
-            child: Row(
-              children: <Widget>[
-                _buildAlert(this._roll),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        this._roll.player,
-                        style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        this._roll.detail,
-                        style: TextStyle(fontSize: 12.0, fontStyle: FontStyle.italic, color: Colors.grey[300]),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  this._roll.result.toString(),
-                  style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+            child: _buildMessage(),
           ),
         ));
   }
 
+  Row _buildMessage() {
+    if (message is Roll) {
+      return _buildRowOfRoll(message);
+    } else if (message is Error) {
+      return _buildRowOfErrorMessage(message);
+    } else {
+      return _buildRowOfGenericMessage(message);
+    }
+  }
+
+  Row _buildRowOfGenericMessage(Message msg) {
+    return Row(
+      children: <Widget>[
+        Text(
+          msg.text,
+          style: TextStyle(fontSize: 12.0, fontStyle: FontStyle.italic, color: Colors.grey[300]),
+        ),
+      ],
+    );
+  }
+
+  Row _buildRowOfErrorMessage(Error msg) {
+    return Row(
+      
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            "${msg.text} (${msg.roll}) => ${msg.cause}",
+            style: TextStyle(fontSize: 16.0, fontStyle: FontStyle.italic, color: Colors.red),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Row _buildRowOfRoll(Roll roll) {
+    return Row(
+      children: <Widget>[
+        _buildAlert(roll),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                roll.player,
+                style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                roll.text,
+                style: TextStyle(fontSize: 12.0, fontStyle: FontStyle.italic, color: Colors.grey[300]),
+              ),
+            ],
+          ),
+        ),
+        Text(
+          roll.result.toString(),
+          style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
   /// Adiciona um Alerta Amarelo cado nenhum dado tenha sido adicionado a rolagem
   Widget _buildAlert(Roll roll) {
-    if (!RegExp(r'd').hasMatch(roll.detail)) {
+    if (!RegExp(r'd').hasMatch(roll.text)) {
       return Padding(
         padding: const EdgeInsets.only(right: 4),
         child: Icon(Icons.warning, color: Colors.yellowAccent),

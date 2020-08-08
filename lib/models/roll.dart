@@ -1,23 +1,20 @@
-class Roll {
+import 'package:rpg_dice_roller/models/message.dart';
+
+class Roll implements Message {
   final String player;
-  final String detail;
+  final String text;
   final int result;
 
-  Roll(this.player, this.detail, this.result);
+  Roll(this.player, this.text, this.result);
 
   Roll.fromJson(Map<String, dynamic> json)
       : player = json['name'],
-        detail = json['rollDetail'],
+        text = json['rollDetail'],
         result = json['result'];
 
   Map<String, dynamic> toJson() => {
         'name': player,
-        'rollDetail': detail,
+        'rollDetail': text,
         'result': result,
       };
-
-  @override
-  String toString() {
-    return 'Roll{player: $player, detail: $detail, result: $result}';
-  }
 }
