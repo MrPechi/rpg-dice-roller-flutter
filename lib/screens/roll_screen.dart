@@ -54,12 +54,11 @@ class RollScreenState extends State<RollScreen> {
 
   final List<Message> _messageHistory = new List();
   final ScrollController _scrollController = new ScrollController();
-
   final Future<SharedPreferences> _configPrefs = SharedPreferences.getInstance();
-
-  String _player = "";
-  String _room = "";
   final Display _display = new Display();
+
+  String _player;
+  String _room;
 
   @override
   void initState() {
@@ -83,7 +82,7 @@ class RollScreenState extends State<RollScreen> {
 
   AppBar _buildAppBar(BuildContext context) {
     return AppBar(
-      title: Text(_room),
+      title: Text(_room != null ? _room : 'Solo'),
       actions: <Widget>[
         _buildIconConnectionStatus(),
         _selectRoomIconButton(context),
@@ -232,14 +231,18 @@ class RollScreenState extends State<RollScreen> {
   }
 
   void _configurePreferences() {
-    _configPrefs.then((_pref) {
-      setState(() {
-        _player = _pref.getString("last-name") != null ? _pref.getString("last-name") : "Solo";
-        _room = _pref.getString("last-room") != null ? _pref.getString("last-room") : "Player";
+    if (_player != null && _room != null) {
+      _configSocket();
+    } else {
+      _configPrefs.then((_pref) {
+        setState(() {
+          _player = _pref.getString("last-name") != null ? _pref.getString("last-name") : "Player";
+          _room = _pref.getString("last-room");
 
-        _configSocket();
+          _configSocket();
+        });
       });
-    });
+    }
   }
 
   void _changeSocketRoom() {
@@ -358,8 +361,6 @@ class Display {
       _display.removeLast();
     }
     _display.add(value);
-
-    debugPrint(this.toString());
   }
 
   /// Limpa o display
@@ -433,7 +434,6 @@ class ItemMessage extends StatelessWidget {
 
   Row _buildRowOfErrorMessage(Error msg) {
     return Row(
-      
       children: <Widget>[
         Expanded(
           child: Text(
