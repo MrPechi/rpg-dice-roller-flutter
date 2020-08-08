@@ -31,7 +31,13 @@ dependencies:
   english_words: ^3.1.5
   shared_preferences: ">=0.5.3 <2.0.0"
   socket_io_client: ^0.9.11
-  flutter_socket_io: ^0.6.0
+  flutter_launcher_icons: "^0.7.3"
+
+flutter_icons:
+  image_path: "assets/icon/text_icon.jpg"
+  android: true
+  ios: true
+
 
 dev_dependencies:
   flutter_test:
