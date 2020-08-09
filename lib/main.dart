@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:rpg_dice_roller/screens/roll_screen.dart';
+import 'package:rpg_dice_roller/screens/rooms_screen.dart';
 
-void main() => runApp(DiceRoller());
+void main() {
+  runApp(DiceRoller());
+}
 
 class DiceRoller extends StatelessWidget {
   @override
@@ -13,7 +15,7 @@ class DiceRoller extends StatelessWidget {
     ]);
 
     return MaterialApp(
-      home: RollScreen(),
+      home: RoomsScreen(), // RollScreen(),
       theme: ThemeData.dark(),
     );
   }

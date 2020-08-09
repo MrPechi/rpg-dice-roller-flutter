@@ -5,9 +5,10 @@ import 'package:flutter/widgets.dart';
 import 'package:rpg_dice_roller/models/error.dart';
 import 'package:rpg_dice_roller/models/message.dart';
 import 'package:rpg_dice_roller/models/roll.dart';
-import 'package:rpg_dice_roller/screens/room_select_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:rpg_dice_roller/models/room.dart';
+import 'package:rpg_dice_roller/screens/rooms_screen.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:package_info/package_info.dart';
 
 enum ButtonType { DIE, NUMBER, FUNCTION, OPERATOR }
 
@@ -37,9 +38,21 @@ enum ButtonType { DIE, NUMBER, FUNCTION, OPERATOR }
 
 //  DICE_ROLLER_OUTGOING_EVENTS = [
 //     roll
+//     change-room
 //  ];
 
+// ignore: must_be_immutable
 class RollScreen extends StatefulWidget {
+  static const String _SOCKET_ADDRESS = "wss://www.pechibits.com:443";
+  static const String _SOCKET_PATH = "/dice-roller-socket";
+  final List<Message> _messageHistory = new List();
+  final ScrollController _scrollController = new ScrollController();
+  final Display _display = new Display();
+
+  Room _room;
+
+  RollScreen(this._room);
+
   @override
   State<StatefulWidget> createState() {
     return RollScreenState();
@@ -47,23 +60,17 @@ class RollScreen extends StatefulWidget {
 }
 
 class RollScreenState extends State<RollScreen> {
-  static const String _SOCKET_ADDRESS = "wss://www.pechibits.com:443";
-  static const String _SOCKET_PATH = "/dice-roller-socket";
   IO.Socket _socket;
   bool _socketConnected = false;
-
-  final List<Message> _messageHistory = new List();
-  final ScrollController _scrollController = new ScrollController();
-  final Future<SharedPreferences> _configPrefs = SharedPreferences.getInstance();
-  final Display _display = new Display();
-
-  String _player;
-  String _room;
+  String _appVersion;
 
   @override
   void initState() {
     super.initState();
-    _configurePreferences();
+    PackageInfo.fromPlatform().then((PackageInfo packageInfo) {
+      _appVersion = "${packageInfo.version}.${packageInfo.buildNumber}";
+      _configSocket();
+    });
   }
 
   @override
@@ -82,7 +89,7 @@ class RollScreenState extends State<RollScreen> {
 
   AppBar _buildAppBar(BuildContext context) {
     return AppBar(
-      title: Text(_room != null ? _room : 'Solo'),
+      title: Text(widget._room.roomName),
       actions: <Widget>[
         _buildIconConnectionStatus(),
         _selectRoomIconButton(context),
@@ -106,15 +113,18 @@ class RollScreenState extends State<RollScreen> {
 
   /// Componete de lista de mensagens
   ///
-  /// Apresenta cada uma das mensagens que chegarem ao "_rollHistory" e
-  /// desliza suavemente para baixo.
+  /// Apresenta as mensagens que chegarem ao "_messageHistory" e
+  /// desliza suavemente para baixo se necessário.
   Widget _buildRollHistory() {
+    if (widget._messageHistory.length > widget._room.messageHistoryLength) {
+      widget._messageHistory.removeRange(0, widget._messageHistory.length - widget._room.messageHistoryLength);
+    }
     return ListView.builder(
-      controller: _scrollController,
+      controller: widget._scrollController,
       shrinkWrap: true,
-      itemCount: _messageHistory.length,
+      itemCount: widget._messageHistory.length,
       itemBuilder: (context, index) {
-        return ItemMessage(_messageHistory[index], index);
+        return ItemMessage(widget._messageHistory[index], index);
       },
     );
   }
@@ -126,7 +136,7 @@ class RollScreenState extends State<RollScreen> {
         Expanded(
           child: Container(
             child: Text(
-              _display.toString(),
+              widget._display.toString(),
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black, fontSize: 24),
             ),
@@ -134,6 +144,11 @@ class RollScreenState extends State<RollScreen> {
             padding: EdgeInsets.symmetric(vertical: 8),
           ),
         ),
+        IconButton(
+          icon: Icon(widget._room.secretRolls ? Icons.visibility_off : Icons.visibility),
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          onPressed: () => setState(() => widget._room.secretRolls = !widget._room.secretRolls) ,
+        )
       ],
     );
   }
@@ -167,14 +182,13 @@ class RollScreenState extends State<RollScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) {
-            return TableSelectScreen();
+            return RoomsScreen();
           }),
         ).then((value) {
           if (value != null) {
             setState(() {
-              _room = value.roomName;
-              _player = value.playerName;
-              _messageHistory.clear();
+              widget._room = value;
+              widget._messageHistory.clear();
             });
             _changeSocketRoom();
           }
@@ -219,109 +233,92 @@ class RollScreenState extends State<RollScreen> {
 
   _setDisplayValue(RollButton button) {
     if (button.type != ButtonType.FUNCTION) {
-      setState(() => _display.add(button));
+      setState(() => widget._display.add(button));
     } else if (button.value == 'del') {
-      setState(() => _display.clear());
+      setState(() => widget._display.clear());
     } else if (button.value == "Roll") {
-      if (_display.isFilled()) {
-        _socket.emit("roll", {'roll': _display.toString()});
-        setState(() => _display.clear());
+      if (widget._display.isFilled()) {
+        debugPrint({'roll': widget._display.toString(), 'secret': widget._room.secretRolls}.toString());
+        _socket.emit("roll", {'roll': widget._display.toString(), 'secret': widget._room.secretRolls});
+        setState(() => widget._display.clear());
       }
     }
   }
 
-  void _configurePreferences() {
-    if (_player != null && _room != null) {
-      _configSocket();
-    } else {
-      _configPrefs.then((_pref) {
-        setState(() {
-          _player = _pref.getString("last-name") != null ? _pref.getString("last-name") : "Player";
-          _room = _pref.getString("last-room");
-
-          _configSocket();
-        });
-      });
-    }
-  }
-
   void _changeSocketRoom() {
-    _socket.emit('change-room', {'name': _player, 'room': _room});
+    _socket.emit('change-room', {'name': widget._room.playerName, 'room': widget._room.roomName});
   }
 
   void _configSocket() {
-    _socket = IO.io(_SOCKET_ADDRESS, <String, dynamic>{
+    _socket = IO.io(RollScreen._SOCKET_ADDRESS, <String, dynamic>{
       'transports': ['websocket'],
-      'path': _SOCKET_PATH,
-      'query': {'name': _player, 'room': _room}
+      'path': RollScreen._SOCKET_PATH,
+      'query': {'name': widget._room.playerName, 'room': widget._room.roomName, 'appVersion': _appVersion}
     });
 
     _socket.on('connect', (_) {
-      setState(() {
-        _socketConnected = true;
-      });
+      setState(() => _socketConnected = true);
     });
 
-    _socket.on('connect_error', (data) {
-      debugPrint("connect_error: " + data.toString());
-    });
+//    _socket.on('connect_error', (data) {
+//      debugPrint("connect_error: " + data.toString());
+//    });
 
     _socket.on('disconnect', (_) {
-      setState(() {
-        _socketConnected = false;
-      });
+      setState(() => _socketConnected = false);
       debugPrint('disconnect');
     });
 
-    _socket.on('player-disconnect', (msg) {
-      setState(() {
-        Message m = Message.fromJson(msg);
-        _messageHistory.add(m);
-      });
-      _scrollDown();
-    });
-
-    _socket.on('player-connect', (msg) {
-      setState(() {
-        Message m = Message.fromJson(msg);
-        _messageHistory.add(m);
-      });
-      _scrollDown();
+    _socket.on('simple-message', (msg) {
+      _addMessage(msg);
     });
 
     _socket.on('server-error', (err) {
-      setState(() {
-        Error m = Error.fromJson(err);
-        _messageHistory.add(m);
-      });
-      _scrollDown();
+      _addErrorMessage(err);
     });
 
     _socket.on('roll-result', (roll) {
       setState(() {
         Roll r = Roll.fromJson(roll);
-        _messageHistory.add(r);
+        debugPrint(roll.toString());
+        widget._messageHistory.add(r);
       });
       _scrollDown();
     });
 
     _socket.on('roll-history', (rolls) {
       setState(() {
-        _messageHistory.clear();
+        widget._messageHistory.clear();
         for (Map<String, dynamic> rollJson in rolls) {
           Roll r = Roll.fromJson(rollJson);
-          _messageHistory.add(r);
+          widget._messageHistory.add(r);
         }
       });
       _scrollDown();
     });
   }
 
+  void _addErrorMessage(err) {
+    setState(() {
+      Error m = Error.fromJson(err);
+      widget._messageHistory.add(m);
+    });
+    _scrollDown();
+  }
+
+  void _addMessage(msg) {
+    setState(() {
+      Message m = Message.fromJson(msg);
+      widget._messageHistory.add(m);
+    });
+    _scrollDown();
+  }
+
   void _scrollDown() {
     Timer(
       Duration(milliseconds: 500),
-      () => _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+      () => widget._scrollController.animateTo(
+        widget._scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeOut,
       ),
@@ -424,9 +421,11 @@ class ItemMessage extends StatelessWidget {
   Row _buildRowOfGenericMessage(Message msg) {
     return Row(
       children: <Widget>[
-        Text(
-          msg.text,
-          style: TextStyle(fontSize: 12.0, fontStyle: FontStyle.italic, color: Colors.grey[300]),
+        Expanded(
+          child: Text(
+            msg.text,
+            style: TextStyle(fontSize: 16.0, fontStyle: FontStyle.italic, color: Colors.yellowAccent),
+          ),
         ),
       ],
     );
@@ -448,6 +447,7 @@ class ItemMessage extends StatelessWidget {
   Row _buildRowOfRoll(Roll roll) {
     return Row(
       children: <Widget>[
+        _buildVisibilitySignal(roll),
         _buildAlert(roll),
         Expanded(
           child: Column(
@@ -478,6 +478,17 @@ class ItemMessage extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.only(right: 4),
         child: Icon(Icons.warning, color: Colors.yellowAccent),
+      );
+    } else {
+      return Container();
+    }
+  }
+
+  Widget _buildVisibilitySignal(Roll roll) {
+    if (roll.secret) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: Icon(Icons.visibility_off, color: Colors.red),
       );
     } else {
       return Container();
