@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:rpg_dice_roller/database/rooms.dart';
+import 'package:rpg_dice_roller/models/debug.dart';
 import 'package:rpg_dice_roller/models/error.dart';
 import 'package:rpg_dice_roller/models/message.dart';
 import 'package:rpg_dice_roller/models/roll.dart';
@@ -49,9 +51,7 @@ class RollScreen extends StatefulWidget {
   final ScrollController _scrollController = new ScrollController();
   final Display _display = new Display();
 
-  Room _room;
-
-  RollScreen(this._room);
+  RollScreen();
 
   @override
   State<StatefulWidget> createState() {
@@ -60,17 +60,30 @@ class RollScreen extends StatefulWidget {
 }
 
 class RollScreenState extends State<RollScreen> {
+  Room _room;
+  bool _debugEnable = false;
   IO.Socket _socket;
   bool _socketConnected = false;
   String _appVersion;
 
   @override
   void initState() {
-    super.initState();
-    PackageInfo.fromPlatform().then((PackageInfo packageInfo) {
-      _appVersion = "${packageInfo.version}.${packageInfo.buildNumber}";
-      _configSocket();
+    _room = Room.empty();
+    _selectRoom(() {
+      PackageInfo.fromPlatform().then((PackageInfo packageInfo) {
+        _appVersion = "${packageInfo.version}.${packageInfo.buildNumber}";
+        _configSocket();
+      });
     });
+    super.initState();
+  }
+
+  @override
+  void didUpdateWidget(RollScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_debugEnable) {
+      widget._messageHistory.add(Debug.fromJson('didUpdateWidget.room', _room));
+    }
   }
 
   @override
@@ -89,7 +102,7 @@ class RollScreenState extends State<RollScreen> {
 
   AppBar _buildAppBar(BuildContext context) {
     return AppBar(
-      title: Text(widget._room.roomName),
+      title: Text(_room.roomName),
       actions: <Widget>[
         _buildIconConnectionStatus(),
         _selectRoomIconButton(context),
@@ -116,16 +129,12 @@ class RollScreenState extends State<RollScreen> {
   /// Apresenta as mensagens que chegarem ao "_messageHistory" e
   /// desliza suavemente para baixo se necessário.
   Widget _buildRollHistory() {
-    if (widget._messageHistory.length > widget._room.messageHistoryLength) {
-      widget._messageHistory.removeRange(0, widget._messageHistory.length - widget._room.messageHistoryLength);
-    }
+    _removeMessageHistory();
     return ListView.builder(
       controller: widget._scrollController,
       shrinkWrap: true,
       itemCount: widget._messageHistory.length,
-      itemBuilder: (context, index) {
-        return ItemMessage(widget._messageHistory[index], index);
-      },
+      itemBuilder: (context, index) => ItemMessage(widget._messageHistory[index], index),
     );
   }
 
@@ -145,9 +154,9 @@ class RollScreenState extends State<RollScreen> {
           ),
         ),
         IconButton(
-          icon: Icon(widget._room.secretRolls ? Icons.visibility_off : Icons.visibility),
+          icon: Icon(_room.secretRolls ? Icons.visibility_off : Icons.visibility),
           padding: EdgeInsets.symmetric(horizontal: 8),
-          onPressed: () => setState(() => widget._room.secretRolls = !widget._room.secretRolls) ,
+          onPressed: () => setState(() => _room.secretRolls = !_room.secretRolls),
         )
       ],
     );
@@ -186,11 +195,7 @@ class RollScreenState extends State<RollScreen> {
           }),
         ).then((value) {
           if (value != null) {
-            setState(() {
-              widget._room = value;
-              widget._messageHistory.clear();
-            });
-            _changeSocketRoom();
+            _changeRoom();
           }
         });
       },
@@ -238,57 +243,53 @@ class RollScreenState extends State<RollScreen> {
       setState(() => widget._display.clear());
     } else if (button.value == "Roll") {
       if (widget._display.isFilled()) {
-        debugPrint({'roll': widget._display.toString(), 'secret': widget._room.secretRolls}.toString());
-        _socket.emit("roll", {'roll': widget._display.toString(), 'secret': widget._room.secretRolls});
+        _socket.emit("roll", {'roll': widget._display.toString(), 'secret': _room.secretRolls});
         setState(() => widget._display.clear());
       }
     }
   }
 
   void _changeSocketRoom() {
-    _socket.emit('change-room', {'name': widget._room.playerName, 'room': widget._room.roomName});
+    _socket.emit('change-room', {'name': _room.playerName, 'room': _room.roomName});
   }
 
   void _configSocket() {
     _socket = IO.io(RollScreen._SOCKET_ADDRESS, <String, dynamic>{
       'transports': ['websocket'],
       'path': RollScreen._SOCKET_PATH,
-      'query': {'name': widget._room.playerName, 'room': widget._room.roomName, 'appVersion': _appVersion}
+      'query': {'name': _room.playerName, 'room': _room.roomName, 'appVersion': _appVersion}
     });
 
-    _socket.on('connect', (_) {
-      setState(() => _socketConnected = true);
-    });
+    // Socket.io
+    _handleSocketEvent("connect", (msg) => setState(() => _socketConnected = true));
+    _handleSocketEvent("connect_error", (msg) {});
+    _handleSocketEvent("connect_timeout", (msg) {});
+    _handleSocketEvent("connecting", (msg) {});
+    _handleSocketEvent("disconnect", (msg) => setState(() => _socketConnected = false));
 
-//    _socket.on('connect_error', (data) {
-//      debugPrint("connect_error: " + data.toString());
-//    });
+    _handleSocketEvent("error", (msg) {});
 
-    _socket.on('disconnect', (_) {
-      setState(() => _socketConnected = false);
-      debugPrint('disconnect');
-    });
+    _handleSocketEvent("reconnect", (msg) => _changeRoom());
+    _handleSocketEvent("reconnect_attempt", (msg) {});
+    _handleSocketEvent("reconnect_failed", (msg) {});
+    _handleSocketEvent("reconnect_error", (msg) {});
+    _handleSocketEvent("reconnecting", (msg) {});
 
-    _socket.on('simple-message', (msg) {
-      _addMessage(msg);
-    });
+//    _handleSocketEvent("ping", (msg) {});
+    _handleSocketEvent("pong", (msg) {});
 
-    _socket.on('server-error', (err) {
-      _addErrorMessage(err);
-    });
+    // Server
+    _handleSocketEvent("simple-message", (msg) => _addMessage(msg));
+    _handleSocketEvent("server-error", (err) => _addErrorMessage(err));
 
-    _socket.on('roll-result', (roll) {
-      setState(() {
-        Roll r = Roll.fromJson(roll);
-        debugPrint(roll.toString());
-        widget._messageHistory.add(r);
-      });
+    _handleSocketEvent("roll-result", (roll) {
+      setState(() => widget._messageHistory.add(Roll.fromJson(roll)));
       _scrollDown();
     });
 
-    _socket.on('roll-history', (rolls) {
+    _handleSocketEvent("roll-history", (rolls) {
       setState(() {
-        widget._messageHistory.clear();
+        _clearMessageHistory();
         for (Map<String, dynamic> rollJson in rolls) {
           Roll r = Roll.fromJson(rollJson);
           widget._messageHistory.add(r);
@@ -299,19 +300,24 @@ class RollScreenState extends State<RollScreen> {
   }
 
   void _addErrorMessage(err) {
-    setState(() {
-      Error m = Error.fromJson(err);
-      widget._messageHistory.add(m);
-    });
+    setState(() => widget._messageHistory.add(Error.fromJson(err)));
     _scrollDown();
   }
 
   void _addMessage(msg) {
-    setState(() {
-      Message m = Message.fromJson(msg);
-      widget._messageHistory.add(m);
-    });
+    setState(() => widget._messageHistory.add(Message.fromJson(msg)));
     _scrollDown();
+  }
+
+  void _handleSocketEvent(String event, void callback(data)) {
+    _socket.on(event, (msg) {
+      if (_debugEnable) {
+        debugPrint("$event => ${msg.toString()}");
+        setState(() => widget._messageHistory.add(Debug.fromJson(event, msg)));
+        _scrollDown();
+      }
+      callback(msg);
+    });
   }
 
   void _scrollDown() {
@@ -323,6 +329,34 @@ class RollScreenState extends State<RollScreen> {
         curve: Curves.easeOut,
       ),
     );
+  }
+
+  void _removeMessageHistory() {
+    if (!_debugEnable) {
+      if (widget._messageHistory.length > _room.messageHistoryLength) {
+        widget._messageHistory.removeRange(0, widget._messageHistory.length - _room.messageHistoryLength);
+      }
+    }
+  }
+
+  void _clearMessageHistory() {
+    if (!_debugEnable) {
+      widget._messageHistory.clear();
+    }
+  }
+
+  void _selectRoom(callback) {
+    getSelectedRoom().then((room) {
+      setState(() {
+        _room = room;
+        _clearMessageHistory();
+      });
+      callback();
+    });
+  }
+
+  void _changeRoom() {
+    _selectRoom(() => _changeSocketRoom());
   }
 }
 
@@ -413,6 +447,8 @@ class ItemMessage extends StatelessWidget {
       return _buildRowOfRoll(message);
     } else if (message is Error) {
       return _buildRowOfErrorMessage(message);
+    } else if (message is Debug) {
+      return _buildRowOfDebugMessage(message);
     } else {
       return _buildRowOfGenericMessage(message);
     }
@@ -438,6 +474,19 @@ class ItemMessage extends StatelessWidget {
           child: Text(
             "${msg.text} (${msg.roll}) => ${msg.cause}",
             style: TextStyle(fontSize: 16.0, fontStyle: FontStyle.italic, color: Colors.red),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Row _buildRowOfDebugMessage(Debug msg) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            "${msg.event} => ${msg.text}",
+            style: TextStyle(fontSize: 16.0, fontStyle: FontStyle.italic, color: Colors.blue),
           ),
         ),
       ],

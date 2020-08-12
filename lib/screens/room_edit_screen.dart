@@ -4,7 +4,7 @@ import 'package:english_words/english_words.dart';
 import 'package:flutter/material.dart';
 import 'package:rpg_dice_roller/components/buttons.dart';
 import 'package:rpg_dice_roller/components/inputs.dart';
-import 'package:rpg_dice_roller/database/updates.dart';
+import 'package:rpg_dice_roller/database/rooms.dart';
 import 'package:rpg_dice_roller/models/room.dart';
 
 class RoomEditScreen extends StatefulWidget {
@@ -25,7 +25,7 @@ class RoomEditScreenState extends State<RoomEditScreen> {
 
   RoomEditScreenState(this._room) {
     if (_room == null) {
-      this._room = new Room(null, "", "", false, 50);
+      this._room = new Room.empty();
     }
     _playerController = new TextEditingController(text: _room.playerName);
     _roomController = new TextEditingController(text: _room.roomName);

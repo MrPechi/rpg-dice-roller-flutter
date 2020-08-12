@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
-import 'package:rpg_dice_roller/database/queries.dart';
+import 'package:rpg_dice_roller/database/rooms.dart';
 import 'package:rpg_dice_roller/models/room.dart';
 import 'package:rpg_dice_roller/screens/roll_screen.dart';
 import 'package:rpg_dice_roller/screens/room_edit_screen.dart';
@@ -53,9 +53,7 @@ class RoomsScreenState extends State<RoomsScreen> {
               ),
             );
           case ConnectionState.done:
-            final List<Room> _rooms = List();
-            _rooms.add(Room.solo());
-            _rooms.addAll(snapshot.data);
+            final List<Room> _rooms = snapshot.data;
             return ListView.builder(
                 itemCount: _rooms.length,
                 itemBuilder: (context, index) {
@@ -95,15 +93,18 @@ class RoomsScreenState extends State<RoomsScreen> {
   void _navigateToRollScreen(BuildContext context, Room room) {
     if (Navigator.canPop(context)) {
       debugPrint("pop");
-      Navigator.pop(context, room);
+      selectRoom(room).then((value) => Navigator.pop(context, value));
     } else {
       debugPrint("pushReplacement");
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) {
-          return RollScreen(room);
-        }),
-      );
+      selectRoom(room).then((value) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) {
+            return RollScreen();
+          }),
+        );
+      });
+
     }
   }
 
