@@ -13,6 +13,7 @@ Future<int> insertRoom(Database db, Room room) {
   roomMap['secret_rolls'] = room.secretRolls ? 1 : 0;
   roomMap['message_history_length'] = room.messageHistoryLength;
   roomMap['selected'] = room.selected != null && room.selected ? 1 : 0;
+  roomMap['wakelock'] = room.wakelock != null && room.wakelock ? 1 : 0;
   return db.insert('rooms', roomMap);
 }
 
@@ -24,6 +25,7 @@ Future<int> updateRoom(Room room) {
     roomMap['secret_rolls'] = room.secretRolls ? 1 : 0;
     roomMap['message_history_length'] = room.messageHistoryLength;
     roomMap['selected'] = room.selected != null && room.selected ? 1 : 0;
+    roomMap['wakelock'] = room.wakelock != null && room.wakelock ? 1 : 0;
     return db.update('rooms', roomMap, where: "id = ?", whereArgs: [room.id]);
   });
 }

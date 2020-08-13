@@ -7,8 +7,7 @@ class Room {
   bool secretRolls;
   int messageHistoryLength;
   bool selected;
-
-  Room(this.id, this.roomName, this.playerName, this.secretRolls, this.messageHistoryLength, this.selected);
+  bool wakelock;
 
   Room.fromMap(Map<String, dynamic> map)
       : id = map['id'],
@@ -16,7 +15,8 @@ class Room {
         playerName = map['player_name'],
         secretRolls = map['secret_rolls'] == 1,
         messageHistoryLength = map['message_history_length'],
-        selected = map['selected'] == 1;
+        selected = map['selected'] == 1,
+        wakelock = map['wakelock'] == 1;
 
   Room.solo() {
     id = Room.SOLO_ID;
@@ -25,6 +25,7 @@ class Room {
     secretRolls = false;
     messageHistoryLength = 20;
     selected = true;
+    wakelock = false;
   }
 
   Room.empty() {
@@ -34,10 +35,11 @@ class Room {
     secretRolls = false;
     messageHistoryLength = 20;
     selected = false;
+    wakelock = false;
   }
 
   @override
   String toString() {
-    return 'Room{id: $id, roomName: $roomName, playerName: $playerName, secretRolls: $secretRolls, messageHistoryLength: $messageHistoryLength, selected: $selected}';
+    return 'Room{id: $id, roomName: $roomName, playerName: $playerName, secretRolls: $secretRolls, messageHistoryLength: $messageHistoryLength, selected: $selected, wakelock: $wakelock}';
   }
 }

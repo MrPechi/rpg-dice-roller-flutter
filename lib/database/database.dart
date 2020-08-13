@@ -3,7 +3,7 @@ import 'package:rpg_dice_roller/database/rooms.dart';
 import 'package:rpg_dice_roller/models/room.dart';
 import 'package:sqflite/sqflite.dart';
 
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 Future<Database> openRPGDiceDatabase() {
   return getDatabasesPath().then((dbPath) {
@@ -13,6 +13,12 @@ Future<Database> openRPGDiceDatabase() {
       path,
       onCreate: (db, version) async {
         await _createDatabaseV1(db);
+        await _upgradeDatabaseV2(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion == 1) {
+          await _upgradeDatabaseV2(db);
+        }
       },
       version: DB_VERSION,
     );
@@ -29,4 +35,9 @@ Future<void> _createDatabaseV1(Database db) async {
       'selected BOOLEAN)');
 
   await insertRoom(db, Room.solo());
+}
+
+Future<void> _upgradeDatabaseV2(Database db) async {
+  await db.execute('ALTER TABLE rooms '
+      'ADD COLUMN wakelock BOOLEAN DEFAULT 0');
 }

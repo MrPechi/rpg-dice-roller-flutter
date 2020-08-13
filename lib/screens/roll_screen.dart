@@ -11,6 +11,7 @@ import 'package:rpg_dice_roller/models/room.dart';
 import 'package:rpg_dice_roller/screens/rooms_screen.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:package_info/package_info.dart';
+import 'package:wakelock/wakelock.dart';
 
 enum ButtonType { DIE, NUMBER, FUNCTION, OPERATOR }
 
@@ -351,6 +352,11 @@ class RollScreenState extends State<RollScreen> {
         _room = room;
         _clearMessageHistory();
       });
+      if (_room.wakelock) {
+        Wakelock.enable();
+      }else{
+        Wakelock.disable();
+      }
       callback();
     });
   }

@@ -56,8 +56,21 @@ class RoomEditScreenState extends State<RoomEditScreen> {
                 onTap: () => _onSecretRollChange(),
                 child: Row(
                   children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(Icons.visibility_off, color: Colors.red),
+                    ),
                     Expanded(child: Text("Rolagem Secreta", style: TextStyle(color: Colors.grey[500], fontSize: 24))),
                     Switch(value: _room.secretRolls, onChanged: (bool newValue) => _onSecretRollChange()),
+                  ],
+                ),
+              ),
+              InkWell(
+                onTap: () => _onSecretWakeLock(),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(child: Text("Tela Ligada", style: TextStyle(color: Colors.grey[500], fontSize: 24))),
+                    Switch(value: _room.wakelock, onChanged: (bool newValue) => _onSecretWakeLock()),
                   ],
                 ),
               ),
@@ -113,6 +126,10 @@ class RoomEditScreenState extends State<RoomEditScreen> {
 
   void _onSecretRollChange() {
     setState(() => _room.secretRolls = !_room.secretRolls);
+  }
+
+  void _onSecretWakeLock() {
+    setState(() => _room.wakelock = !_room.wakelock);
   }
 
   Future<void> _saveOrUpdate(BuildContext context) async {
