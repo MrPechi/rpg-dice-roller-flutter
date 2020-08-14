@@ -6,8 +6,7 @@ import 'package:rpg_dice_roller/screens/rooms_screen.dart';
 
 void main() {
   runApp(DiceRoller());
-
-findAll().then((value) => debugPrint(value.toString()));
+//  findAll().then((value) => debugPrint(value.toString()));
 }
 
 class DiceRoller extends StatelessWidget {
@@ -18,8 +17,9 @@ class DiceRoller extends StatelessWidget {
     ]);
 
     return MaterialApp(
-      home: RoomsScreen(), // RollScreen(),
+      home: RoomsScreen(),
       theme: ThemeData.dark(),
+      title: "RPG Dice Roller",
     );
   }
 }

@@ -20,6 +20,8 @@ Types of changes:
 
 - Este CHANGELOG, para auxiliar no controle de mudanças
 - Plugin Wakelock, para que a tela possa ficar sempre ativa
+- Título para a tela de gerenciamenot de aplicações
+
 
 ## [1.0.1] - 2020-08-11
 
