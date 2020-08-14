@@ -146,7 +146,7 @@ class RollScreenState extends State<RollScreen> {
         Expanded(
           child: Container(
             child: Text(
-              widget._display.toString(),
+              widget._display.toText(),
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black, fontSize: 24),
             ),
@@ -241,10 +241,10 @@ class RollScreenState extends State<RollScreen> {
     if (button.type != ButtonType.FUNCTION) {
       setState(() => widget._display.add(button));
     } else if (button.value == 'del') {
-      setState(() => widget._display.clear());
+      setState(() => widget._display.delLast());
     } else if (button.value == "Roll") {
       if (widget._display.isFilled()) {
-        _socket.emit("roll", {'roll': widget._display.toString(), 'secret': _room.secretRolls});
+        _socket.emit("roll", {'roll': widget._display.toSafeRoll(), 'secret': _room.secretRolls});
         setState(() => widget._display.clear());
       }
     }
@@ -405,11 +405,22 @@ class Display {
     _display.clear();
   }
 
+  void delLast() {
+    _display.removeLast();
+  }
+
   bool isFilled() {
     return _display.length > 0;
   }
 
-  String toString() {
+  String toSafeRoll() {
+    if (_display.last.type == ButtonType.OPERATOR) {
+      _display.removeLast();
+    }
+    return toText();
+  }
+
+  String toText() {
     String response = "";
     for (RollButton item in _display) {
       if (item.type == ButtonType.OPERATOR) {

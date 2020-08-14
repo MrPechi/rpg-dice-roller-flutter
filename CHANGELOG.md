@@ -22,6 +22,9 @@ Types of changes:
 - Plugin Wakelock, para que a tela possa ficar sempre ativa
 - Título para a tela de gerenciamenot de aplicações
 
+### Changed 
+
+- A pedidos, botão passa a apagar item a item do display 
 
 ## [1.0.1] - 2020-08-11
 
