@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:rpg_dice_roller/database/namedRolls.dart';
 import 'package:rpg_dice_roller/database/rooms.dart';
 import 'package:rpg_dice_roller/models/debug.dart';
 import 'package:rpg_dice_roller/models/error.dart';
@@ -90,6 +91,7 @@ class RollScreenState extends State<RollScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: _buildAppBar(context),
       body: Column(
         children: <Widget>[
@@ -143,6 +145,11 @@ class RollScreenState extends State<RollScreen> {
   Widget _buildDisplay() {
     return Row(
       children: <Widget>[
+        IconButton(
+          icon: Icon(Icons.save),
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          onPressed: widget._display.isFilled() ? () => _nameARoll() : null,
+        ),
         Expanded(
           child: Container(
             child: Text(
@@ -324,11 +331,12 @@ class RollScreenState extends State<RollScreen> {
   void _scrollDown() {
     Timer(
       Duration(milliseconds: 500),
-      () => widget._scrollController.animateTo(
-        widget._scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeOut,
-      ),
+          () =>
+          widget._scrollController.animateTo(
+            widget._scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOut,
+          ),
     );
   }
 
@@ -354,7 +362,7 @@ class RollScreenState extends State<RollScreen> {
       });
       if (_room.wakelock) {
         Wakelock.enable();
-      }else{
+      } else {
         Wakelock.disable();
       }
       callback();
@@ -363,6 +371,47 @@ class RollScreenState extends State<RollScreen> {
 
   void _changeRoom() {
     _selectRoom(() => _changeSocketRoom());
+  }
+
+  Future<void> _nameARoll() async {
+    final TextEditingController _controller = new TextEditingController();
+
+    await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return SimpleDialog(
+
+            title: const Text('Nome da Rolagem'),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16),
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: TextField(
+                  autocorrect: false,
+                  autofocus: true,
+                  controller: _controller,
+                  style: TextStyle(fontSize: 24.0),
+                ),
+              ),
+              RaisedButton(
+                  child: Text("Salvar"),
+                  onPressed: () {
+                    if (_controller.text.isNotEmpty) {
+                      saveNameRoll(_room.id, _controller.text, widget._display.toSafeRoll())
+                          .then((value) => Navigator.pop(context, true));
+                    }
+                  }
+              )
+            ],
+          );
+        });
+  }
+}
+
+class SaveNamedRoll extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container();
   }
 }
 
