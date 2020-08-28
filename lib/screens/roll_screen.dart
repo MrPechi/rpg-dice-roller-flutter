@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:rpg_dice_roller/database/namedRolls.dart';
@@ -7,6 +9,7 @@ import 'package:rpg_dice_roller/database/rooms.dart';
 import 'package:rpg_dice_roller/models/debug.dart';
 import 'package:rpg_dice_roller/models/error.dart';
 import 'package:rpg_dice_roller/models/message.dart';
+import 'package:rpg_dice_roller/models/namedRoll.dart';
 import 'package:rpg_dice_roller/models/roll.dart';
 import 'package:rpg_dice_roller/models/room.dart';
 import 'package:rpg_dice_roller/screens/rooms_screen.dart';
@@ -90,9 +93,102 @@ class RollScreenState extends State<RollScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final double statusBarHeight = MediaQuery.of(context).padding.top;
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: _buildAppBar(context),
+      drawer: Drawer(
+        child: Column(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.blue,
+              ),
+              width: Size.infinite.width,
+              child: Padding(
+                padding: EdgeInsets.only(top: statusBarHeight, bottom: 8),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(_room.roomName, style: TextStyle(fontSize: 32)),
+                    ),
+                    Text(_room.playerName, style: TextStyle(fontSize: 24)),
+                  ],
+                ),
+              ),
+              // decoration: BoxDecoration(
+              //   color: Colors.blue,
+              // ),
+            ),
+            Expanded(
+              child: FutureBuilder<List<NamedRoll>>(
+                future: NamedRolls.findAllNamedRollsOfSelectedRoom(),
+                builder: (context, snapshot) {
+                  switch (snapshot.connectionState) {
+                    case ConnectionState.waiting:
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[CircularProgressIndicator(), Text("Carregando...")],
+                        ),
+                      );
+                    case ConnectionState.done:
+                      final List<NamedRoll> _namedRolls = snapshot.data;
+                      return ListView.builder(
+                          padding: EdgeInsets.zero,
+                          itemCount: _namedRolls.length,
+                          itemBuilder: (context, index) {
+                            return Material(
+                                child: InkWell(
+                                    onTap: () {
+                                      _socket.emit("roll", {'roll': _namedRolls[index].roll});
+                                      setState(() => widget._display.clear());
+                                      Navigator.pop(context);
+                                    },
+                                    child: Card(
+                                        margin: EdgeInsets.only(bottom: 4),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(0),
+                                        ),
+                                        child: Container(
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4),
+                                            child: Row(
+                                              children: <Widget>[
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: <Widget>[
+                                                      Text(
+                                                        _namedRolls[index].name,
+                                                        style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
+                                                      ),
+                                                      Text(
+                                                        _namedRolls[index].roll,
+                                                        style: TextStyle(
+                                                            fontSize: 12.0,
+                                                            fontStyle: FontStyle.italic,
+                                                            color: Colors.grey[300]),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Text("E")
+                                              ],
+                                            ),
+                                          ),
+                                        ))));
+                          });
+                    default:
+                      return Text("Ocorreu um erro estranho... Sentimos muito.");
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
       body: Column(
         children: <Widget>[
           Expanded(child: _buildRollHistory()),
@@ -331,12 +427,11 @@ class RollScreenState extends State<RollScreen> {
   void _scrollDown() {
     Timer(
       Duration(milliseconds: 500),
-          () =>
-          widget._scrollController.animateTo(
-            widget._scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeOut,
-          ),
+      () => widget._scrollController.animateTo(
+        widget._scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOut,
+      ),
     );
   }
 
@@ -380,7 +475,6 @@ class RollScreenState extends State<RollScreen> {
         context: context,
         builder: (BuildContext context) {
           return SimpleDialog(
-
             title: const Text('Nome da Rolagem'),
             contentPadding: EdgeInsets.symmetric(horizontal: 16),
             children: <Widget>[
@@ -397,21 +491,15 @@ class RollScreenState extends State<RollScreen> {
                   child: Text("Salvar"),
                   onPressed: () {
                     if (_controller.text.isNotEmpty) {
-                      saveNameRoll(_room.id, _controller.text, widget._display.toSafeRoll())
-                          .then((value) => Navigator.pop(context, true));
+                      NamedRolls.saveNameRoll(_room.id, _controller.text, widget._display.toSafeRoll()).then((value) {
+                        Navigator.pop(context, true);
+                        setState(() {});
+                      });
                     }
-                  }
-              )
+                  })
             ],
           );
         });
-  }
-}
-
-class SaveNamedRoll extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container();
   }
 }
 

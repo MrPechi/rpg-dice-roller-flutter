@@ -8,7 +8,7 @@ void main() {
   runApp(DiceRoller());
 //  findAll().then((value) => debugPrint(value.toString()));
 
-    findAll(1).then((value) {
+    NamedRolls.findAll(1).then((value) {
       debugPrint(value.toString());
     });
 }
